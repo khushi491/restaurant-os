@@ -153,11 +153,17 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addTable = async (tableData: Omit<Table, "id">) => {
-    const res = await fetch('/api/tables', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(tableData) });
-    if (res.ok) setTables(prev => [...prev, (res.json() as any)]); // This is wrong, res.json() is a promise
-    // Fixed:
+    const res = await fetch('/api/tables', { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify(tableData) 
+    });
     const data = await res.json();
-    if (res.ok) setTables(prev => [...prev, data]);
+    if (res.ok) {
+      setTables(prev => [...prev, data]);
+    } else {
+      console.error("ADD TABLE ERROR:", data);
+    }
   };
 
   const deleteTable = async (tableId: string) => {
