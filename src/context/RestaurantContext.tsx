@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import {
   Branch,
   User,
@@ -10,7 +10,7 @@ import {
   WaitlistEntry,
 } from "../types";
 
-// Mock Data Seed
+// Keep static users/branches for now as they are higher-level settings
 const mockBranches: Branch[] = [
   { id: "b1", name: "Downtown Prime", address: "123 Main St", cancellationFeeFixed: 50, cancellationFeePercent: null },
   { id: "b2", name: "Uptown Grill", address: "456 High St", cancellationFeeFixed: null, cancellationFeePercent: 10 },
@@ -22,36 +22,6 @@ const mockUsers: User[] = [
   { id: "u3", name: "Emily Davis (Server)", role: "Server", branchIds: ["b1"] },
 ];
 
-const mockTables: Table[] = [
-  // Downtown Prime (b1) - Top row
-  { id: "t1", branchId: "b1", number: "101", capacity: 2, status: "available", x: 100, y: 100, shape: "square" },
-  { id: "t2", branchId: "b1", number: "102", capacity: 2, status: "occupied", seatedAt: new Date(Date.now() - 45 * 60000).toISOString(), assignedServerId: "u3", x: 250, y: 100, shape: "square" },
-  { id: "t3", branchId: "b1", number: "103", capacity: 4, status: "reserved", x: 400, y: 100, shape: "rectangle" },
-  // Downtown Prime (b1) - Middle row
-  { id: "t4", branchId: "b1", number: "201", capacity: 4, status: "cleaning", x: 100, y: 250, shape: "circle" },
-  { id: "t5", branchId: "b1", number: "202", capacity: 6, status: "available", x: 300, y: 250, shape: "rectangle" },
-  // Downtown Prime (b1) - Bottom row
-  { id: "t6", branchId: "b1", number: "301", capacity: 2, status: "occupied", seatedAt: new Date(Date.now() - 10 * 60000).toISOString(), x: 100, y: 400, shape: "square" },
-  
-  // Uptown Grill (b2)
-  { id: "t10", branchId: "b2", number: "1", capacity: 2, status: "available", x: 150, y: 150, shape: "circle" },
-];
-
-const mockGuests: Guest[] = [
-  { id: "g1", name: "Alice Johnson", phone: "555-0100", email: "alice@example.com", visitCount: 5, loyaltyStatus: "VIP", dietaryRestrictions: ["Gluten-Free"], notes: "Prefers window seat" },
-  { id: "g2", name: "Bob Martin", phone: "555-0200", email: "bob@example.com", visitCount: 1, loyaltyStatus: "Standard", dietaryRestrictions: [], notes: "" },
-];
-
-const mockReservations: Reservation[] = [
-  { id: "r1", branchId: "b1", guestId: "g1", partySize: 4, date: new Date().toISOString().split('T')[0], time: "19:00", status: "upcoming", tableId: "t3", createdAt: new Date().toISOString(), notes: "Anniversary" },
-  { id: "r2", branchId: "b1", guestId: "g2", partySize: 2, date: new Date().toISOString().split('T')[0], time: "20:30", status: "upcoming", createdAt: new Date().toISOString() },
-];
-
-const mockWaitlist: WaitlistEntry[] = [
-  { id: "w1", branchId: "b1", guestId: "g2", partySize: 2, quotedWaitTimeMins: 30, joinedAt: new Date().toISOString(), status: "waiting", notes: "First available" }
-];
-
-
 interface RestaurantState {
   currentUser: User;
   currentBranch: Branch;
@@ -61,6 +31,7 @@ interface RestaurantState {
   reservations: Reservation[];
   waitlist: WaitlistEntry[];
   users: User[];
+  loading: boolean;
   setCurrentBranch: (branch: Branch) => void;
   updateTableStatus: (tableId: string, status: Table["status"]) => void;
   updateTablePosition: (tableId: string, x: number, y: number) => void;
@@ -79,91 +50,134 @@ const RestaurantContext = createContext<RestaurantState | undefined>(undefined);
 export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
   const [branches] = useState<Branch[]>(mockBranches);
   const [users] = useState<User[]>(mockUsers);
-  const [currentUser] = useState<User>(mockUsers[0]); // Default to Manager for demo
+  const [currentUser] = useState<User>(mockUsers[0]);
   const [currentBranch, setCurrentBranch] = useState<Branch>(mockBranches[0]);
+  const [loading, setLoading] = useState(true);
   
-  const [tables, setTables] = useState<Table[]>(mockTables);
-  const [guests] = useState<Guest[]>(mockGuests);
-  const [reservations, setReservations] = useState<Reservation[]>(mockReservations);
-  const [waitlist] = useState<WaitlistEntry[]>(mockWaitlist);
+  const [tables, setTables] = useState<Table[]>([]);
+  const [guests, setGuests] = useState<Guest[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
 
-  const updateTableStatus = (tableId: string, status: Table["status"]) => {
-    setTables(prev => prev.map(t => t.id === tableId ? { ...t, status, seatedAt: status === 'occupied' ? new Date().toISOString() : t.seatedAt } : t));
-  };
+  // Fetch tables from DB on branch change
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/tables?branchId=${currentBranch.id}`);
+        const data = await res.json();
+        setTables(data);
+      } catch (err) {
+        console.error("Failed to load tables", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, [currentBranch.id]);
 
-  const updateTablePosition = (tableId: string, x: number, y: number) => {
-    setTables(prev => prev.map(t => t.id === tableId ? { ...t, x, y } : t));
-  };
+  const updateTableStatus = async (tableId: string, status: Table["status"]) => {
+    const table = tables.find(t => t.id === tableId);
+    if (!table) return;
 
-  const updateTable = (tableId: string, updates: Partial<Table>) => {
+    const updates: Partial<Table> = { 
+        status, 
+        seatedAt: status === 'occupied' ? new Date().toISOString() : table.seatedAt 
+    };
+
     setTables(prev => prev.map(t => t.id === tableId ? { ...t, ...updates } : t));
+    await fetch('/api/tables', {
+      method: 'POST',
+      body: JSON.stringify({ id: tableId, ...updates })
+    });
   };
 
-  const mergeTables = (tableIds: string[]) => {
+  const updateTablePosition = async (tableId: string, x: number, y: number) => {
+    setTables(prev => prev.map(t => t.id === tableId ? { ...t, x, y } : t));
+    await fetch('/api/tables', {
+      method: 'POST',
+      body: JSON.stringify({ id: tableId, x, y })
+    });
+  };
+
+  const updateTable = async (tableId: string, updates: Partial<Table>) => {
+    setTables(prev => prev.map(t => t.id === tableId ? { ...t, ...updates } : t));
+    await fetch('/api/tables', {
+      method: 'POST',
+      body: JSON.stringify({ id: tableId, ...updates })
+    });
+  };
+
+  const mergeTables = async (tableIds: string[]) => {
     const tablesToMerge = tables.filter(t => tableIds.includes(t.id));
     if (tablesToMerge.length < 2) return;
 
     const mainTable = tablesToMerge[0];
     const totalCapacity = tablesToMerge.reduce((sum, t) => sum + t.capacity, 0);
-    const combinedNumber = tablesToMerge.map(t => t.number).join("+");
+    const combinedNumber = tablesToMerge.map(t => t.number).sort().join("+");
 
-    setTables(prev => {
-      // Keep only one "combined" table, hide others
-      const filtered = prev.filter(t => !tableIds.includes(t.id));
-      const combinedTable: Table = {
-        ...mainTable,
-        id: `combined-${Date.now()}`,
-        number: combinedNumber,
-        capacity: totalCapacity,
-        status: 'combined',
-        shape: 'rectangle',
-        isCombined: true,
-        mergedTableIds: tableIds
-      };
-      return [...filtered, combinedTable];
+    const combinedTable: any = {
+      branchId: currentBranch.id,
+      number: combinedNumber,
+      capacity: totalCapacity,
+      status: 'combined',
+      shape: 'rectangle',
+      x: mainTable.x,
+      y: mainTable.y,
+      isCombined: true,
+      mergedTableIds: tableIds
+    };
+
+    // Use transaction to delete parts and add combined
+    const res = await fetch('/api/tables', {
+      method: 'POST',
+      body: JSON.stringify([combinedTable]) // Need to update route logic for deletes or just mark status
     });
+    const result = await res.json();
+    
+    // For prototype simplicity, refresh all tables from DB
+    const refreshRes = await fetch(`/api/tables?branchId=${currentBranch.id}`);
+    const data = await refreshRes.json();
+    setTables(data);
   };
 
-  const splitTable = (tableId: string) => {
+  const splitTable = async (tableId: string) => {
     const combinedTable = tables.find(t => t.id === tableId);
     if (!combinedTable || !combinedTable.mergedTableIds) return;
 
-    // In a real DB, we'd restore the originals. 
-    // For this prototype, we'll re-add physical placeholders
-    const restoredTables: Table[] = combinedTable.mergedTableIds.map((id, index) => ({
-      id,
-      branchId: combinedTable.branchId,
-      number: combinedTable.number.split("+")[index] || "??",
-      capacity: Math.floor(combinedTable.capacity / combinedTable.mergedTableIds!.length),
-      status: 'available',
-      x: combinedTable.x + (index * 100), // Space them out
-      y: combinedTable.y,
-      shape: 'square'
-    }));
-
-    setTables(prev => {
-      const filtered = prev.filter(t => t.id !== tableId);
-      return [...filtered, ...restoredTables];
-    });
+    // For simplicity: delete combined and recreate parts or just reload
+    await fetch(`/api/tables?id=${tableId}`, { method: 'DELETE' });
+    
+    // In a real app, restore originals. Here we just re-seed if empty or reload
+    const refreshRes = await fetch(`/api/tables?branchId=${currentBranch.id}`);
+    const data = await refreshRes.json();
+    setTables(data);
   };
 
-  const addTable = (tableData: Omit<Table, "id">) => {
-    const newTable: Table = {
-      ...tableData,
-      id: `t${Date.now()}`
-    };
+  const addTable = async (tableData: Omit<Table, "id">) => {
+    const res = await fetch('/api/tables', {
+      method: 'POST',
+      body: JSON.stringify(tableData)
+    });
+    const newTable = await res.json();
     setTables(prev => [...prev, newTable]);
   };
 
-  const deleteTable = (tableId: string) => {
+  const deleteTable = async (tableId: string) => {
     setTables(prev => prev.filter(t => t.id !== tableId));
+    await fetch(`/api/tables?id=${tableId}`, { method: 'DELETE' });
   };
 
-  const assignServer = (tableId: string, serverId: string) => {
+  const assignServer = async (tableId: string, serverId: string) => {
     setTables(prev => prev.map(t => t.id === tableId ? { ...t, assignedServerId: serverId } : t));
+    await fetch('/api/tables', {
+      method: 'POST',
+      body: JSON.stringify({ id: tableId, assignedServerId: serverId })
+    });
   };
 
   const addReservation = (resData: Omit<Reservation, "id" | "createdAt" | "status">) => {
+    // Keep mock for now
     const newRes: Reservation = {
       ...resData,
       id: `r${Date.now()}`,
@@ -187,6 +201,7 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
       reservations,
       waitlist,
       users,
+      loading,
       setCurrentBranch,
       updateTableStatus,
       updateTablePosition,

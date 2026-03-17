@@ -1,0 +1,81 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Branch {
+  id                     String        @id @default(cuid())
+  name                   String
+  address                String
+  cancellationFeeFixed   Float?
+  cancellationFeePercent Float?
+  tables                 Table[]
+  reservations           Reservation[]
+  waitlist               WaitlistEntry[]
+}
+
+model Table {
+  id               String   @id @default(cuid())
+  branchId         String
+  branch           Branch   @relation(fields: [branchId], references: [id])
+  number           String
+  capacity         Int
+  status           String   // available, reserved, occupied, cleaning, combined
+  assignedServerId String?
+  currentResId     String?
+  seatedAt         DateTime?
+  x                Int
+  y                Int
+  shape            String   // circle, square, rectangle
+  isCombined       Boolean  @default(false)
+  mergedTableIds   String?  // JSON stringified array of IDs
+}
+
+model Guest {
+  id                 String   @id @default(cuid())
+  name               String
+  phone              String
+  email              String
+  visitCount         Int      @default(0)
+  loyaltyStatus      String   // Standard, VIP
+  dietaryRestrictions String?  // JSON stringified array
+  notes              String?
+  reservations       Reservation[]
+  waitlist           WaitlistEntry[]
+}
+
+model Reservation {
+  id                   String   @id @default(cuid())
+  branchId             String
+  branch               Branch   @relation(fields: [branchId], references: [id])
+  guestId              String
+  guest                Guest    @relation(fields: [guestId], references: [id])
+  partySize            Int
+  date                 String   // YYYY-MM-DD
+  time                 String   // HH:mm
+  status               String   // upcoming, seated, completed, cancelled, no-show
+  tableId              String?
+  notes                String?
+  cancellationFeeApplied Float?
+  createdAt            DateTime @default(now())
+}
+
+model WaitlistEntry {
+  id                 String   @id @default(cuid())
+  branchId           String
+  branch             Branch   @relation(fields: [branchId], references: [id])
+  guestId            String
+  guest              Guest    @relation(fields: [guestId], references: [id])
+  partySize          Int
+  quotedWaitTimeMins Int
+  joinedAt           DateTime @default(now())
+  status             String   // waiting, seated, abandoned
+  notes              String?
+}
