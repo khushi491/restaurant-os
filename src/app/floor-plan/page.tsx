@@ -8,9 +8,28 @@ export default function FloorPlan() {
   const { currentBranch, tables, users, updateTableStatus, assignServer, updateTablePosition, updateTableRotation, updateTable, mergeTables, splitTable, addTable, deleteTable, loading } = useRestaurant();
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [selectedTableIds, setSelectedTableIds] = useState<string[]>([]);
+  const [composition, setComposition] = useState<Table[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const floorPlanRef = useRef<HTMLDivElement>(null);
+
+  // Fetch composition for combined table
+  useEffect(() => {
+    async function loadComposition() {
+      const selected = tables.find(t => t.id === selectedTableId);
+      if (selected?.isCombined && selected.mergedTableIds) {
+        const res = await fetch('/api/tables/composition', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tableIds: selected.mergedTableIds })
+        });
+        if (res.ok) setComposition(await res.json());
+      } else {
+        setComposition([]);
+      }
+    }
+    loadComposition();
+  }, [selectedTableId, tables]);
 
   const branchTables = tables.filter(t => t.branchId === currentBranch.id);
 
@@ -308,9 +327,21 @@ export default function FloorPlan() {
                       <div style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.5rem' }}>Layout Actions</div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         {table.isCombined && (
-                          <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleSplit}>
-                            Split Table
-                          </button>
+                          <>
+                            <div style={{ marginBottom: '1rem' }}>
+                              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>COMPOSITION</div>
+                              <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                                {composition.map(ct => (
+                                  <span key={ct.id} style={{ background: 'var(--bg-secondary)', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', border: '1px solid var(--border-color)' }}>
+                                    #{ct.number}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                            <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleSplit}>
+                              Split Table
+                            </button>
+                          </>
                         )}
                         <button className="btn btn-outline" style={{ width: '100%', color: 'var(--status-occupied)', borderColor: 'var(--status-occupied)' }} onClick={handleDeleteTable}>
                           Delete Table

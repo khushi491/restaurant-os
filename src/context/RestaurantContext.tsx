@@ -138,16 +138,54 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
     const mainTable = tablesToMerge[0];
     const totalCapacity = tablesToMerge.reduce((sum, t) => sum + t.capacity, 0);
     const combinedNumber = tablesToMerge.map(t => t.number).sort().join("+");
-    const combinedTable: any = { branchId: currentBranch.id, number: combinedNumber, capacity: totalCapacity, status: 'combined', shape: 'rectangle', x: mainTable.x, y: mainTable.y, isCombined: true, mergedTableIds: tableIds };
-    const res = await fetch('/api/tables', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([combinedTable]) });
+    
+    // 1. Create the combined parent
+    const combinedTable: any = { 
+      branchId: currentBranch.id, 
+      number: combinedNumber, 
+      capacity: totalCapacity, 
+      status: 'combined', 
+      shape: 'rectangle', 
+      x: mainTable.x, 
+      y: mainTable.y, 
+      isCombined: true, 
+      mergedTableIds: tableIds 
+    };
+    
+    const res = await fetch('/api/tables', { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify(combinedTable) 
+    });
+    const newParent = await res.json();
+
     if (res.ok) {
+        // 2. Mark physical tables as merged into this parent
+        await fetch('/api/tables', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(tableIds.map(id => ({ id, mergedIntoId: newParent.id })))
+        });
+
         const refreshRes = await fetch(`/api/tables?branchId=${currentBranch.id}`);
         setTables(await refreshRes.json());
     }
   };
 
   const splitTable = async (tableId: string) => {
+    const combinedTable = tables.find(t => t.id === tableId);
+    if (!combinedTable || !combinedTable.mergedTableIds) return;
+
+    // 1. Clear mergedIntoId for physical children
+    await fetch('/api/tables', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(combinedTable.mergedTableIds.map(id => ({ id, mergedIntoId: null })))
+    });
+
+    // 2. Delete the parent
     await fetch(`/api/tables?id=${tableId}`, { method: 'DELETE' });
+    
     const refreshRes = await fetch(`/api/tables?branchId=${currentBranch.id}`);
     setTables(await refreshRes.json());
   };

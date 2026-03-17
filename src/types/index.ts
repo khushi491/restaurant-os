@@ -31,6 +31,7 @@ export interface Table {
   shape: 'circle' | 'square' | 'rectangle';
   rotation?: number; // In degrees
   isCombined?: boolean;
+  mergedIntoId?: string; // ID of the combined table this physical table belongs to
   mergedTableIds?: string[]; // IDs of physical tables that make up this combined table
 }
 

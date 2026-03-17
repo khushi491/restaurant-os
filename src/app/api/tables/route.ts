@@ -11,7 +11,10 @@ export async function GET(request: Request) {
     }
 
     const tables = await prisma.table.findMany({
-      where: { branchId }
+      where: { 
+        branchId,
+        mergedIntoId: null // Hide physical tables that are currently part of a group
+      }
     });
 
     const parsedTables = tables.map(t => ({
@@ -44,7 +47,8 @@ function sanitizeTableData(table: any) {
     rotation, 
     assignedServerId, 
     currentResId, 
-    isCombined 
+    isCombined,
+    mergedIntoId 
   } = table;
   
   // Safe date conversion
@@ -65,6 +69,7 @@ function sanitizeTableData(table: any) {
     shape: String(shape || 'square'),
     rotation: parseInt(rotation) || 0,
     isCombined: Boolean(isCombined),
+    mergedIntoId: mergedIntoId || null,
     assignedServerId: assignedServerId || null,
     currentResId: currentResId || null,
     mergedTableIds: Array.isArray(mergedTableIds) ? JSON.stringify(mergedTableIds) : null,

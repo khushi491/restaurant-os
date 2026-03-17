@@ -36,7 +36,8 @@ model Table {
   shape            String   // circle, square, rectangle
   rotation         Int      @default(0)
   isCombined       Boolean  @default(false)
-  mergedTableIds   String?  // JSON stringified array of IDs
+  mergedIntoId     String?  // ID of the combined table this physical table belongs to
+  mergedTableIds   String?  // JSON stringified array of IDs (for the parent combined table)
 }
 
 model Guest {
