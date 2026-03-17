@@ -5,8 +5,9 @@ import { useRestaurant } from "@/context/RestaurantContext";
 import { Table } from "@/types";
 
 export default function FloorPlan() {
-  const { currentBranch, tables, users, updateTableStatus, assignServer, updateTablePosition, addTable, deleteTable } = useRestaurant();
+  const { currentBranch, tables, users, updateTableStatus, assignServer, updateTablePosition, updateTable, mergeTables, splitTable, addTable, deleteTable } = useRestaurant();
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [selectedTableIds, setSelectedTableIds] = useState<string[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const floorPlanRef = useRef<HTMLDivElement>(null);
@@ -22,6 +23,12 @@ export default function FloorPlan() {
   const handleServerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (selectedTableId) {
       assignServer(selectedTableId, e.target.value);
+    }
+  };
+
+  const handlePropertyChange = (field: keyof Table, value: any) => {
+    if (selectedTableId) {
+      updateTable(selectedTableId, { [field]: value });
     }
   };
 
@@ -47,10 +54,45 @@ export default function FloorPlan() {
     }
   };
 
+  const handleMerge = () => {
+    if (selectedTableIds.length < 2) {
+      alert("Please select at least 2 tables to merge (hold Ctrl/Cmd to multi-select)");
+      return;
+    }
+    mergeTables(selectedTableIds);
+    setSelectedTableIds([]);
+    setSelectedTableId(null);
+  };
+
+  const handleSplit = () => {
+    if (selectedTableId) {
+      splitTable(selectedTableId);
+      setSelectedTableId(null);
+    }
+  };
+
+  const handleTableClick = (e: React.MouseEvent, tableId: string) => {
+    if (isEditMode) {
+      if (e.ctrlKey || e.metaKey) {
+        setSelectedTableIds(prev => 
+          prev.includes(tableId) ? prev.filter(id => id !== tableId) : [...prev, tableId]
+        );
+      } else {
+        setSelectedTableId(tableId);
+        setSelectedTableIds([tableId]);
+      }
+    } else {
+      setSelectedTableId(tableId);
+    }
+  };
+
   const handleMouseDown = (e: React.MouseEvent, tableId: string) => {
     if (!isEditMode) return;
-    setSelectedTableId(tableId);
     setIsDragging(true);
+    if (!selectedTableIds.includes(tableId)) {
+       setSelectedTableId(tableId);
+       setSelectedTableIds([tableId]);
+    }
   };
 
   useEffect(() => {
@@ -58,10 +100,9 @@ export default function FloorPlan() {
       if (!isDragging || !selectedTableId || !floorPlanRef.current) return;
 
       const rect = floorPlanRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left - 40; // Subtract half-width (approx 40px)
-      const y = e.clientY - rect.top - 40; // Subtract half-height (approx 40px)
+      const x = e.clientX - rect.left - 40;
+      const y = e.clientY - rect.top - 40;
 
-      // Snap to grid (optional)
       const snapX = Math.round(x / 10) * 10;
       const snapY = Math.round(y / 10) * 10;
 
@@ -89,11 +130,18 @@ export default function FloorPlan() {
         <h1 className="card-title" style={{ margin: 0, fontSize: '1.5rem' }}>Floor Plan</h1>
         <div style={{ display: 'flex', gap: '1rem' }}>
           {isEditMode && (
-            <button className="btn btn-outline" onClick={handleAddTable}>+ Add Table</button>
+            <>
+              <button className="btn btn-outline" onClick={handleAddTable}>+ Add Table</button>
+              <button className="btn btn-outline" onClick={handleMerge} disabled={selectedTableIds.length < 2}>Merge Selected</button>
+            </>
           )}
           <button 
             className={`btn ${isEditMode ? 'btn-primary' : 'btn-outline'}`}
-            onClick={() => setIsEditMode(!isEditMode)}
+            onClick={() => {
+                setIsEditMode(!isEditMode);
+                setSelectedTableIds([]);
+                setSelectedTableId(null);
+            }}
           >
             {isEditMode ? 'Save Layout' : 'Modify Floor Plan'}
           </button>
@@ -115,16 +163,18 @@ export default function FloorPlan() {
           }}
         >
           {branchTables.map(table => {
+            const isSelected = selectedTableId === table.id || selectedTableIds.includes(table.id);
             let bgClass = "status-badge available";
             if (table.status === 'occupied') bgClass = "status-badge occupied";
             if (table.status === 'reserved') bgClass = "status-badge reserved";
             if (table.status === 'cleaning') bgClass = "status-badge cleaning";
+            if (table.status === 'combined') bgClass = "status-badge combined";
 
             return (
               <div
                 key={table.id}
                 onMouseDown={(e) => handleMouseDown(e, table.id)}
-                onClick={() => !isEditMode && setSelectedTableId(table.id)}
+                onClick={(e) => handleTableClick(e, table.id)}
                 style={{
                   position: 'absolute',
                   left: table.x,
@@ -137,12 +187,12 @@ export default function FloorPlan() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: isEditMode ? 'move' : 'pointer',
-                  boxShadow: selectedTableId === table.id ? '0 0 0 4px var(--brand-accent)' : 'var(--shadow-md)',
+                  boxShadow: isSelected ? '0 0 0 4px var(--brand-accent)' : 'var(--shadow-md)',
                   backgroundColor: 'var(--bg-secondary)',
                   border: '2px solid var(--border-color)',
                   transition: isDragging ? 'none' : 'all 0.2s',
                   userSelect: 'none',
-                  zIndex: selectedTableId === table.id ? 10 : 1
+                  zIndex: isSelected ? 10 : 1
                 }}
               >
                 <div style={{ fontWeight: 700, fontSize: '1.25rem' }}>{table.number}</div>
@@ -152,7 +202,7 @@ export default function FloorPlan() {
                     {table.status}
                   </div>
                 )}
-                {isEditMode && selectedTableId === table.id && (
+                {isEditMode && isSelected && (
                   <div style={{ position: 'absolute', top: '-10px', right: '-10px', background: 'var(--brand-primary)', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>
                     ✥
                   </div>
@@ -163,7 +213,7 @@ export default function FloorPlan() {
         </div>
 
         {/* Sidebar Controls */}
-        <div className="card" style={{ width: '300px', display: 'flex', flexDirection: 'column' }}>
+        <div className="card" style={{ width: '300px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
           <h2 className="card-title">Table Controls</h2>
           
           {selectedTableId ? (() => {
@@ -171,14 +221,66 @@ export default function FloorPlan() {
             if (!table) return null;
             
             return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>Table Number</label>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{table.number} <span style={{ fontSize: '1rem', color: 'var(--text-secondary)', fontWeight: 400 }}>({table.capacity} seats)</span></div>
-                </div>
-
-                {!isEditMode && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                {isEditMode ? (
                   <>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.875rem' }}>Table Number</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        style={{ width: '100%' }} 
+                        value={table.number} 
+                        onChange={(e) => handlePropertyChange('number', e.target.value)} 
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.875rem' }}>Capacity</label>
+                      <input 
+                        type="number" 
+                        className="form-input" 
+                        style={{ width: '100%' }} 
+                        value={table.capacity} 
+                        onChange={(e) => handlePropertyChange('capacity', parseInt(e.target.value) || 0)} 
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.875rem' }}>Shape</label>
+                      <select 
+                        className="form-select" 
+                        style={{ width: '100%' }} 
+                        value={table.shape} 
+                        onChange={(e) => handlePropertyChange('shape', e.target.value)}
+                      >
+                        <option value="square">Square</option>
+                        <option value="circle">Circle</option>
+                        <option value="rectangle">Rectangle</option>
+                      </select>
+                    </div>
+
+                    <div style={{ padding: '1rem', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.5rem' }}>Layout Actions</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        {table.isCombined && (
+                          <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleSplit}>
+                            Split Table
+                          </button>
+                        )}
+                        <button className="btn btn-outline" style={{ width: '100%', color: 'var(--status-occupied)', borderColor: 'var(--status-occupied)' }} onClick={handleDeleteTable}>
+                          Delete Table
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600 }}>Table Info</label>
+                      <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{table.number} <span style={{ fontSize: '1rem', color: 'var(--text-secondary)', fontWeight: 400 }}>({table.capacity} seats)</span></div>
+                    </div>
+
                     <div>
                       <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.875rem' }}>Status</label>
                       <select className="form-select" style={{ width: '100%' }} value={table.status} onChange={handleStatusChange}>
@@ -186,7 +288,7 @@ export default function FloorPlan() {
                         <option value="reserved">Reserved</option>
                         <option value="occupied">Occupied</option>
                         <option value="cleaning">Cleaning</option>
-                        <option value="combined">Combined</option>
+                        <option value="combined" disabled>Combined</option>
                       </select>
                     </div>
 
@@ -199,36 +301,26 @@ export default function FloorPlan() {
                         ))}
                       </select>
                     </div>
-                  </>
-                )}
-
-                {isEditMode && (
-                  <>
-                    <div style={{ padding: '1rem', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-                      <div style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.5rem' }}>Table Properties</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <div style={{ fontSize: '0.75rem' }}>X: {table.x}, Y: {table.y}</div>
-                        <button className="btn btn-outline" style={{ width: '100%', color: 'var(--status-occupied)', borderColor: 'var(--status-occupied)' }} onClick={handleDeleteTable}>
-                          Delete Table
-                        </button>
+                    
+                    {table.seatedAt && table.status === 'occupied' && (
+                      <div style={{ padding: '1rem', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
+                        <div style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.25rem' }}>Time Seated</div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+                          {Math.floor((Date.now() - new Date(table.seatedAt).getTime()) / 60000)} mins ago
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </>
-                )}
-                
-                {table.seatedAt && table.status === 'occupied' && !isEditMode && (
-                  <div style={{ padding: '1rem', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-                    <div style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.25rem' }}>Time Seated</div>
-                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-                      {Math.floor((Date.now() - new Date(table.seatedAt).getTime()) / 60000)} mins ago
-                    </div>
-                  </div>
                 )}
               </div>
             );
           })() : (
             <div style={{ color: 'var(--text-secondary)', textAlign: 'center', marginTop: '2rem' }}>
-              Select a table on the floor plan to manage its {isEditMode ? 'layout' : 'status'}.
+              {isEditMode ? (
+                <p>Select tables (Ctrl/Cmd + click) to Merge,<br/>or select one to Edit properties.</p>
+              ) : (
+                <p>Select a table on the floor plan to manage its status.</p>
+              )}
             </div>
           )}
         </div>

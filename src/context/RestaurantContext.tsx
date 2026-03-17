@@ -64,6 +64,9 @@ interface RestaurantState {
   setCurrentBranch: (branch: Branch) => void;
   updateTableStatus: (tableId: string, status: Table["status"]) => void;
   updateTablePosition: (tableId: string, x: number, y: number) => void;
+  updateTable: (tableId: string, updates: Partial<Table>) => void;
+  mergeTables: (tableIds: string[]) => void;
+  splitTable: (tableId: string) => void;
   addTable: (table: Omit<Table, "id">) => void;
   deleteTable: (tableId: string) => void;
   assignServer: (tableId: string, serverId: string) => void;
@@ -90,6 +93,58 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
 
   const updateTablePosition = (tableId: string, x: number, y: number) => {
     setTables(prev => prev.map(t => t.id === tableId ? { ...t, x, y } : t));
+  };
+
+  const updateTable = (tableId: string, updates: Partial<Table>) => {
+    setTables(prev => prev.map(t => t.id === tableId ? { ...t, ...updates } : t));
+  };
+
+  const mergeTables = (tableIds: string[]) => {
+    const tablesToMerge = tables.filter(t => tableIds.includes(t.id));
+    if (tablesToMerge.length < 2) return;
+
+    const mainTable = tablesToMerge[0];
+    const totalCapacity = tablesToMerge.reduce((sum, t) => sum + t.capacity, 0);
+    const combinedNumber = tablesToMerge.map(t => t.number).join("+");
+
+    setTables(prev => {
+      // Keep only one "combined" table, hide others
+      const filtered = prev.filter(t => !tableIds.includes(t.id));
+      const combinedTable: Table = {
+        ...mainTable,
+        id: `combined-${Date.now()}`,
+        number: combinedNumber,
+        capacity: totalCapacity,
+        status: 'combined',
+        shape: 'rectangle',
+        isCombined: true,
+        mergedTableIds: tableIds
+      };
+      return [...filtered, combinedTable];
+    });
+  };
+
+  const splitTable = (tableId: string) => {
+    const combinedTable = tables.find(t => t.id === tableId);
+    if (!combinedTable || !combinedTable.mergedTableIds) return;
+
+    // In a real DB, we'd restore the originals. 
+    // For this prototype, we'll re-add physical placeholders
+    const restoredTables: Table[] = combinedTable.mergedTableIds.map((id, index) => ({
+      id,
+      branchId: combinedTable.branchId,
+      number: combinedTable.number.split("+")[index] || "??",
+      capacity: Math.floor(combinedTable.capacity / combinedTable.mergedTableIds!.length),
+      status: 'available',
+      x: combinedTable.x + (index * 100), // Space them out
+      y: combinedTable.y,
+      shape: 'square'
+    }));
+
+    setTables(prev => {
+      const filtered = prev.filter(t => t.id !== tableId);
+      return [...filtered, ...restoredTables];
+    });
   };
 
   const addTable = (tableData: Omit<Table, "id">) => {
@@ -135,6 +190,9 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
       setCurrentBranch,
       updateTableStatus,
       updateTablePosition,
+      updateTable,
+      mergeTables,
+      splitTable,
       addTable,
       deleteTable,
       assignServer,
