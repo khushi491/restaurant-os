@@ -22,49 +22,56 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const body = await request.json();
+  try {
+    const body = await request.json();
 
-  // If body is an array, it's a simple list of tables to upsert
-  if (Array.isArray(body)) {
-    const tables = body;
-    
-    const result = await prisma.$transaction(async (tx) => {
-        const upserted = await Promise.all(tables.map((table: any) => {
-            const { id, branchId, ...data } = table;
-            return tx.table.upsert({
-                where: { id: (id && id.length > 5) ? id : 'non-existent' },
-                update: { 
-                  ...data, 
-                  mergedTableIds: data.mergedTableIds ? JSON.stringify(data.mergedTableIds) : null 
-                },
-                create: { 
-                  branchId,
-                  ...data, 
-                  mergedTableIds: data.mergedTableIds ? JSON.stringify(data.mergedTableIds) : null 
-                }
-            });
-        }));
-        return upserted;
+    // Bulk update/insert (Array)
+    if (Array.isArray(body)) {
+      const result = await prisma.$transaction(async (tx) => {
+          return await Promise.all(body.map((table: any) => {
+              const { id, branchId, ...data } = table;
+              // Only use id if it looks like a valid CUID/UUID (not 't123' mock)
+              const isValidId = id && id.length > 10; 
+              
+              return tx.table.upsert({
+                  where: { id: isValidId ? id : 'new-record' },
+                  update: { 
+                    ...data, 
+                    mergedTableIds: data.mergedTableIds ? JSON.stringify(data.mergedTableIds) : null 
+                  },
+                  create: { 
+                    branchId: branchId || 'b1',
+                    ...data, 
+                    mergedTableIds: data.mergedTableIds ? JSON.stringify(data.mergedTableIds) : null 
+                  }
+              });
+          }));
+      });
+      return NextResponse.json(result);
+    }
+
+    // Single table upsert (Object)
+    const { id, branchId, ...data } = body;
+    const isValidId = id && id.length > 10;
+
+    const result = await prisma.table.upsert({
+      where: { id: isValidId ? id : 'new-record' },
+      update: { 
+        ...data, 
+        mergedTableIds: data.mergedTableIds ? JSON.stringify(data.mergedTableIds) : null 
+      },
+      create: { 
+        branchId: branchId || 'b1',
+        ...data, 
+        mergedTableIds: data.mergedTableIds ? JSON.stringify(data.mergedTableIds) : null 
+      }
     });
 
     return NextResponse.json(result);
+  } catch (error: any) {
+    console.error("API Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
-
-  // Single table upsert
-  const { id, ...data } = body;
-  const result = await prisma.table.upsert({
-    where: { id: id || 'new' },
-    update: { 
-      ...data, 
-      mergedTableIds: data.mergedTableIds ? JSON.stringify(data.mergedTableIds) : null 
-    },
-    create: { 
-      ...data, 
-      mergedTableIds: data.mergedTableIds ? JSON.stringify(data.mergedTableIds) : null 
-    }
-  });
-
-  return NextResponse.json(result);
 }
 
 export async function DELETE(request: Request) {
@@ -75,6 +82,10 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
 
-  await prisma.table.delete({ where: { id } });
-  return NextResponse.json({ success: true });
+  try {
+    await prisma.table.delete({ where: { id } });
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }
