@@ -217,10 +217,16 @@ export default function FloorPlan() {
                                   height: '100%',
                                   pointerEvents: 'none'
                                 }}>
-                                  <div style={{ fontWeight: 700, fontSize: '1.25rem' }}>{table.number}</div>
-                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Cap: {table.capacity}</div>
-                                  {!isEditMode && (
-                                    <div className={bgClass} style={{ marginTop: '0.25rem', fontSize: '0.65rem', padding: '0.125rem 0.375rem' }}>
+                                                  <div style={{ fontWeight: 700, fontSize: '1.25rem' }}>{table.number}</div>
+                                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Cap: {table.capacity}</div>
+                                                  
+                                                  {table.assignedServerId && (
+                                                    <div style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--brand-primary)', marginTop: '0.125rem' }}>
+                                                      Srv: {users.find(u => u.id === table.assignedServerId)?.name.split(' ')[0]}
+                                                    </div>
+                                                  )}
+                                  
+                                                  {!isEditMode && (                                    <div className={bgClass} style={{ marginTop: '0.25rem', fontSize: '0.65rem', padding: '0.125rem 0.375rem' }}>
                                       {table.status}
                                     </div>
                                   )}

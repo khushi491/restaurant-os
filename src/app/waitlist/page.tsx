@@ -1,18 +1,65 @@
 "use client";
 
+import { useState } from "react";
 import { useRestaurant } from "@/context/RestaurantContext";
 
 export default function Waitlist() {
-  const { currentBranch, waitlist, guests } = useRestaurant();
+  const { currentBranch, waitlist, guests, addToWaitlist, loading } = useRestaurant();
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    guestId: "g1",
+    partySize: 2,
+    quotedWaitTimeMins: 30,
+    notes: ""
+  });
 
-  const branchWaitlist = waitlist.filter(w => w.branchId === currentBranch.id);
+  const branchWaitlist = waitlist.filter(w => w.branchId === currentBranch.id && w.status === 'waiting');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await addToWaitlist(formData);
+    setIsFormOpen(false);
+  };
+
+  if (loading) return <div>Loading waitlist...</div>;
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <h1 className="card-title" style={{ margin: 0, fontSize: '1.5rem' }}>Waitlist</h1>
-        <button className="btn btn-primary">Add to Waitlist</button>
+        <button className="btn btn-primary" onClick={() => setIsFormOpen(!isFormOpen)}>
+          {isFormOpen ? 'Close Form' : 'Add to Waitlist'}
+        </button>
       </div>
+
+      {isFormOpen && (
+        <div className="card" style={{ marginBottom: '2rem' }}>
+          <h2 className="card-title">Add Guest to Waitlist</h2>
+          <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem' }}>Guest</label>
+              <select className="form-select" style={{ width: '100%' }} value={formData.guestId} onChange={e => setFormData({ ...formData, guestId: e.target.value })}>
+                {guests.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem' }}>Party Size</label>
+              <input type="number" className="form-input" style={{ width: '100%' }} value={formData.partySize} onChange={e => setFormData({ ...formData, partySize: parseInt(e.target.value) })} />
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem' }}>Quoted Wait (Mins)</label>
+              <input type="number" className="form-input" style={{ width: '100%' }} value={formData.quotedWaitTimeMins} onChange={e => setFormData({ ...formData, quotedWaitTimeMins: parseInt(e.target.value) })} />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem' }}>Notes</label>
+              <input type="text" className="form-input" style={{ width: '100%' }} value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder="Need window seat, baby chair, etc." />
+            </div>
+            <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end' }}>
+              <button type="submit" className="btn btn-primary">Add Guest</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>

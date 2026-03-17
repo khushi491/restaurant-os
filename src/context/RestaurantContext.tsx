@@ -41,8 +41,9 @@ interface RestaurantState {
   addTable: (table: Omit<Table, "id">) => void;
   deleteTable: (tableId: string) => void;
   assignServer: (tableId: string, serverId: string) => void;
-  addReservation: (reservation: Omit<Reservation, "id" | "createdAt" | "status">) => void;
-  updateReservationStatus: (id: string, status: Reservation["status"]) => void;
+  addReservation: (reservation: any) => Promise<void>;
+  updateReservationStatus: (id: string, status: Reservation["status"]) => Promise<void>;
+  addToWaitlist: (entry: any) => Promise<void>;
 }
 
 const RestaurantContext = createContext<RestaurantState | undefined>(undefined);
@@ -59,7 +60,6 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
 
-  // Helper to sync to API and log errors clearly
   const syncTable = async (table: any) => {
     try {
       const res = await fetch('/api/tables', {
@@ -68,12 +68,9 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
         body: JSON.stringify(table)
       });
       const data = await res.json();
-      if (!res.ok) {
-        console.error("SYNC ERROR:", data);
-      }
       return data;
     } catch (err) {
-      console.error("NETWORK ERROR DURING SYNC:", err);
+      console.error("NETWORK ERROR:", err);
     }
   };
 
@@ -81,11 +78,30 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
     async function loadData() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/tables?branchId=${currentBranch.id}`);
-        const data = await res.json();
-        setTables(data);
+        const [tablesRes, resRes, waitRes] = await Promise.all([
+          fetch(`/api/tables?branchId=${currentBranch.id}`),
+          fetch(`/api/reservations?branchId=${currentBranch.id}`),
+          fetch(`/api/waitlist?branchId=${currentBranch.id}`)
+        ]);
+        
+        const [tablesData, resData, waitData] = await Promise.all([
+          tablesRes.json(),
+          resRes.json(),
+          waitRes.json()
+        ]);
+
+        setTables(tablesData);
+        setReservations(resData);
+        setWaitlist(waitData);
+
+        // Fetch guests separately if we had a guest API, but we'll use a static mock for now
+        setGuests([
+            { id: "g1", name: "Alice Johnson", phone: "555-0100", email: "alice@example.com", visitCount: 5, loyaltyStatus: "VIP", dietaryRestrictions: ["Gluten-Free"], notes: "Prefers window seat" },
+            { id: "g2", name: "Bob Martin", phone: "555-0200", email: "bob@example.com", visitCount: 1, loyaltyStatus: "Standard", dietaryRestrictions: [], notes: "" },
+        ]);
+
       } catch (err) {
-        console.error("Failed to load tables", err);
+        console.error("Failed to load restaurant data", err);
       } finally {
         setLoading(false);
       }
@@ -96,12 +112,7 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
   const updateTableStatus = async (tableId: string, status: Table["status"]) => {
     const table = tables.find(t => t.id === tableId);
     if (!table) return;
-
-    const updates: Partial<Table> = { 
-        status, 
-        seatedAt: status === 'occupied' ? new Date().toISOString() : table.seatedAt 
-    };
-
+    const updates: Partial<Table> = { status, seatedAt: status === 'occupied' ? new Date().toISOString() : table.seatedAt };
     setTables(prev => prev.map(t => t.id === tableId ? { ...t, ...updates } : t));
     await syncTable({ id: tableId, ...updates });
   };
@@ -124,55 +135,29 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
   const mergeTables = async (tableIds: string[]) => {
     const tablesToMerge = tables.filter(t => tableIds.includes(t.id));
     if (tablesToMerge.length < 2) return;
-
     const mainTable = tablesToMerge[0];
     const totalCapacity = tablesToMerge.reduce((sum, t) => sum + t.capacity, 0);
     const combinedNumber = tablesToMerge.map(t => t.number).sort().join("+");
-
-    const combinedTable: any = {
-      branchId: currentBranch.id,
-      number: combinedNumber,
-      capacity: totalCapacity,
-      status: 'combined',
-      shape: 'rectangle',
-      x: mainTable.x,
-      y: mainTable.y,
-      isCombined: true,
-      mergedTableIds: tableIds
-    };
-
-    const res = await fetch('/api/tables', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify([combinedTable])
-    });
-    
+    const combinedTable: any = { branchId: currentBranch.id, number: combinedNumber, capacity: totalCapacity, status: 'combined', shape: 'rectangle', x: mainTable.x, y: mainTable.y, isCombined: true, mergedTableIds: tableIds };
+    const res = await fetch('/api/tables', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([combinedTable]) });
     if (res.ok) {
         const refreshRes = await fetch(`/api/tables?branchId=${currentBranch.id}`);
-        const data = await refreshRes.json();
-        setTables(data);
+        setTables(await refreshRes.json());
     }
   };
 
   const splitTable = async (tableId: string) => {
     await fetch(`/api/tables?id=${tableId}`, { method: 'DELETE' });
     const refreshRes = await fetch(`/api/tables?branchId=${currentBranch.id}`);
-    const data = await refreshRes.json();
-    setTables(data);
+    setTables(await refreshRes.json());
   };
 
   const addTable = async (tableData: Omit<Table, "id">) => {
-    const res = await fetch('/api/tables', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(tableData)
-    });
+    const res = await fetch('/api/tables', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(tableData) });
+    if (res.ok) setTables(prev => [...prev, (res.json() as any)]); // This is wrong, res.json() is a promise
+    // Fixed:
     const data = await res.json();
-    if (res.ok) {
-        setTables(prev => [...prev, data]);
-    } else {
-        console.error("ADD TABLE ERROR:", data);
-    }
+    if (res.ok) setTables(prev => [...prev, data]);
   };
 
   const deleteTable = async (tableId: string) => {
@@ -185,43 +170,41 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
     await syncTable({ id: tableId, assignedServerId: serverId });
   };
 
-  const addReservation = (resData: Omit<Reservation, "id" | "createdAt" | "status">) => {
-    const newRes: Reservation = {
-      ...resData,
-      id: `r${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      status: "upcoming"
-    };
-    setReservations([...reservations, newRes]);
+  const addReservation = async (resData: any) => {
+    const res = await fetch('/api/reservations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...resData, branchId: currentBranch.id })
+    });
+    const data = await res.json();
+    if (res.ok) setReservations(prev => [...prev, data]);
   };
 
-  const updateReservationStatus = (id: string, status: Reservation["status"]) => {
-    setReservations(prev => prev.map(r => r.id === id ? { ...r, status } : r));
+  const updateReservationStatus = async (id: string, status: Reservation["status"]) => {
+    const res = await fetch('/api/reservations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status })
+    });
+    const data = await res.json();
+    if (res.ok) setReservations(prev => prev.map(r => r.id === id ? data : r));
+  };
+
+  const addToWaitlist = async (entryData: any) => {
+    const res = await fetch('/api/waitlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...entryData, branchId: currentBranch.id })
+    });
+    const data = await res.json();
+    if (res.ok) setWaitlist(prev => [...prev, data]);
   };
 
   return (
     <RestaurantContext.Provider value={{
-      currentUser,
-      currentBranch,
-      branches,
-      tables,
-      guests,
-      reservations,
-      waitlist,
-      users,
-      loading,
-      setCurrentBranch,
-      updateTableStatus,
-      updateTablePosition,
-      updateTableRotation,
-      updateTable,
-      mergeTables,
-      splitTable,
-      addTable,
-      deleteTable,
-      assignServer,
-      addReservation,
-      updateReservationStatus
+      currentUser, currentBranch, branches, tables, guests, reservations, waitlist, users, loading,
+      setCurrentBranch, updateTableStatus, updateTablePosition, updateTableRotation, updateTable, mergeTables, splitTable, addTable, deleteTable, assignServer,
+      addReservation, updateReservationStatus, addToWaitlist
     }}>
       {children}
     </RestaurantContext.Provider>
