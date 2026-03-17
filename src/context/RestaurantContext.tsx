@@ -63,6 +63,9 @@ interface RestaurantState {
   users: User[];
   setCurrentBranch: (branch: Branch) => void;
   updateTableStatus: (tableId: string, status: Table["status"]) => void;
+  updateTablePosition: (tableId: string, x: number, y: number) => void;
+  addTable: (table: Omit<Table, "id">) => void;
+  deleteTable: (tableId: string) => void;
   assignServer: (tableId: string, serverId: string) => void;
   addReservation: (reservation: Omit<Reservation, "id" | "createdAt" | "status">) => void;
   updateReservationStatus: (id: string, status: Reservation["status"]) => void;
@@ -83,6 +86,22 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
 
   const updateTableStatus = (tableId: string, status: Table["status"]) => {
     setTables(prev => prev.map(t => t.id === tableId ? { ...t, status, seatedAt: status === 'occupied' ? new Date().toISOString() : t.seatedAt } : t));
+  };
+
+  const updateTablePosition = (tableId: string, x: number, y: number) => {
+    setTables(prev => prev.map(t => t.id === tableId ? { ...t, x, y } : t));
+  };
+
+  const addTable = (tableData: Omit<Table, "id">) => {
+    const newTable: Table = {
+      ...tableData,
+      id: `t${Date.now()}`
+    };
+    setTables(prev => [...prev, newTable]);
+  };
+
+  const deleteTable = (tableId: string) => {
+    setTables(prev => prev.filter(t => t.id !== tableId));
   };
 
   const assignServer = (tableId: string, serverId: string) => {
@@ -115,6 +134,9 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
       users,
       setCurrentBranch,
       updateTableStatus,
+      updateTablePosition,
+      addTable,
+      deleteTable,
       assignServer,
       addReservation,
       updateReservationStatus
