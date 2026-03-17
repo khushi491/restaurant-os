@@ -204,23 +204,34 @@ export default function FloorPlan() {
                   transition: isDragging ? 'none' : 'all 0.2s',
                   userSelect: 'none',
                   zIndex: isSelected ? 10 : 1,
-                  transform: `rotate(${table.rotation || 0}deg)`
-                }}
-              >
-                <div style={{ fontWeight: 700, fontSize: '1.25rem', transform: `rotate(${- (table.rotation || 0)}deg)` }}>{table.number}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', transform: `rotate(${- (table.rotation || 0)}deg)` }}>Cap: {table.capacity}</div>
-                {!isEditMode && (
-                  <div className={bgClass} style={{ marginTop: '0.25rem', fontSize: '0.65rem', padding: '0.125rem 0.375rem', transform: `rotate(${- (table.rotation || 0)}deg)` }}>
-                    {table.status}
-                  </div>
-                )}
-                {isEditMode && isSelected && (
-                  <div style={{ position: 'absolute', top: '-10px', right: '-10px', background: 'var(--brand-primary)', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', transform: `rotate(${- (table.rotation || 0)}deg)` }}>
-                    ✥
-                  </div>
-                )}
-              </div>
-            );
+                                  transform: `rotate(${table.rotation || 0}deg)`
+                                }}
+                              >
+                                <div style={{ 
+                                  display: 'flex', 
+                                  flexDirection: 'column', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center',
+                                  transform: `rotate(${- (table.rotation || 0)}deg)`,
+                                  width: '100%',
+                                  height: '100%',
+                                  pointerEvents: 'none'
+                                }}>
+                                  <div style={{ fontWeight: 700, fontSize: '1.25rem' }}>{table.number}</div>
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Cap: {table.capacity}</div>
+                                  {!isEditMode && (
+                                    <div className={bgClass} style={{ marginTop: '0.25rem', fontSize: '0.65rem', padding: '0.125rem 0.375rem' }}>
+                                      {table.status}
+                                    </div>
+                                  )}
+                                </div>
+                  
+                                {isEditMode && isSelected && (
+                                  <div style={{ position: 'absolute', top: '-10px', right: '-10px', background: 'var(--brand-primary)', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', transform: `rotate(${- (table.rotation || 0)}deg)` }}>
+                                    ✥
+                                  </div>
+                                )}
+                              </div>            );
           })}
         </div>
 
