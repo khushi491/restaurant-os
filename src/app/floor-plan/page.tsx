@@ -5,7 +5,7 @@ import { useRestaurant } from "@/context/RestaurantContext";
 import { Table } from "@/types";
 
 export default function FloorPlan() {
-  const { currentBranch, tables, users, updateTableStatus, assignServer, updateTablePosition, updateTable, mergeTables, splitTable, addTable, deleteTable } = useRestaurant();
+  const { currentBranch, tables, users, updateTableStatus, assignServer, updateTablePosition, updateTableRotation, updateTable, mergeTables, splitTable, addTable, deleteTable, loading } = useRestaurant();
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [selectedTableIds, setSelectedTableIds] = useState<string[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -32,6 +32,12 @@ export default function FloorPlan() {
     }
   };
 
+  const handleRotationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (selectedTableId) {
+      updateTableRotation(selectedTableId, parseInt(e.target.value));
+    }
+  };
+
   const handleAddTable = () => {
     const tableNumber = prompt("Enter Table Number:");
     if (!tableNumber) return;
@@ -43,7 +49,8 @@ export default function FloorPlan() {
       status: 'available',
       x: 50,
       y: 50,
-      shape: 'square'
+      shape: 'square',
+      rotation: 0
     });
   };
 
@@ -124,6 +131,10 @@ export default function FloorPlan() {
     };
   }, [isDragging, selectedTableId, updateTablePosition]);
 
+  if (loading) {
+    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>Loading floor plan...</div>;
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '1rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -192,18 +203,19 @@ export default function FloorPlan() {
                   border: '2px solid var(--border-color)',
                   transition: isDragging ? 'none' : 'all 0.2s',
                   userSelect: 'none',
-                  zIndex: isSelected ? 10 : 1
+                  zIndex: isSelected ? 10 : 1,
+                  transform: `rotate(${table.rotation || 0}deg)`
                 }}
               >
-                <div style={{ fontWeight: 700, fontSize: '1.25rem' }}>{table.number}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Cap: {table.capacity}</div>
+                <div style={{ fontWeight: 700, fontSize: '1.25rem', transform: `rotate(${- (table.rotation || 0)}deg)` }}>{table.number}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', transform: `rotate(${- (table.rotation || 0)}deg)` }}>Cap: {table.capacity}</div>
                 {!isEditMode && (
-                  <div className={bgClass} style={{ marginTop: '0.25rem', fontSize: '0.65rem', padding: '0.125rem 0.375rem' }}>
+                  <div className={bgClass} style={{ marginTop: '0.25rem', fontSize: '0.65rem', padding: '0.125rem 0.375rem', transform: `rotate(${- (table.rotation || 0)}deg)` }}>
                     {table.status}
                   </div>
                 )}
                 {isEditMode && isSelected && (
-                  <div style={{ position: 'absolute', top: '-10px', right: '-10px', background: 'var(--brand-primary)', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>
+                  <div style={{ position: 'absolute', top: '-10px', right: '-10px', background: 'var(--brand-primary)', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', transform: `rotate(${- (table.rotation || 0)}deg)` }}>
                     ✥
                   </div>
                 )}
@@ -258,6 +270,21 @@ export default function FloorPlan() {
                         <option value="circle">Circle</option>
                         <option value="rectangle">Rectangle</option>
                       </select>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.875rem' }}>
+                        Rotation <span>{table.rotation || 0}°</span>
+                      </label>
+                      <input 
+                        type="range" 
+                        min="0" 
+                        max="315" 
+                        step="45" 
+                        value={table.rotation || 0} 
+                        onChange={handleRotationChange}
+                        style={{ width: '100%' }}
+                      />
                     </div>
 
                     <div style={{ padding: '1rem', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>

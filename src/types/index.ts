@@ -29,6 +29,7 @@ export interface Table {
   x: number; // For floor plan positioning
   y: number; // For floor plan positioning
   shape: 'circle' | 'square' | 'rectangle';
+  rotation?: number; // In degrees
   isCombined?: boolean;
   mergedTableIds?: string[]; // IDs of physical tables that make up this combined table
 }

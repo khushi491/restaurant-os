@@ -35,6 +35,7 @@ interface RestaurantState {
   setCurrentBranch: (branch: Branch) => void;
   updateTableStatus: (tableId: string, status: Table["status"]) => void;
   updateTablePosition: (tableId: string, x: number, y: number) => void;
+  updateTableRotation: (tableId: string, rotation: number) => void;
   updateTable: (tableId: string, updates: Partial<Table>) => void;
   mergeTables: (tableIds: string[]) => void;
   splitTable: (tableId: string) => void;
@@ -97,6 +98,14 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
     await fetch('/api/tables', {
       method: 'POST',
       body: JSON.stringify({ id: tableId, x, y })
+    });
+  };
+
+  const updateTableRotation = async (tableId: string, rotation: number) => {
+    setTables(prev => prev.map(t => t.id === tableId ? { ...t, rotation } : t));
+    await fetch('/api/tables', {
+      method: 'POST',
+      body: JSON.stringify({ id: tableId, rotation })
     });
   };
 
@@ -205,6 +214,7 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
       setCurrentBranch,
       updateTableStatus,
       updateTablePosition,
+      updateTableRotation,
       updateTable,
       mergeTables,
       splitTable,

@@ -34,6 +34,7 @@ model Table {
   x                Int
   y                Int
   shape            String   // circle, square, rectangle
+  rotation         Int      @default(0)
   isCombined       Boolean  @default(false)
   mergedTableIds   String?  // JSON stringified array of IDs
 }
