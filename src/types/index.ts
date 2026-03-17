@@ -24,7 +24,7 @@ export interface Table {
   capacity: number;
   status: TableStatus;
   assignedServerId?: string;
-  currentReservationId?: string;
+  currentResId?: string;
   seatedAt?: string; // ISO string
   x: number; // For floor plan positioning
   y: number; // For floor plan positioning
