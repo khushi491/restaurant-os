@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     return NextResponse.json(parsedTables);
   } catch (error: any) {
     console.error("GET Tables Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch tables", details: error.message }, { status: 500 });
   }
 }
 
@@ -47,22 +47,30 @@ function sanitizeTableData(table: any) {
     isCombined 
   } = table;
   
+  // Safe date conversion
+  let safeSeatedAt: Date | null = null;
+  if (seatedAt) {
+    const date = new Date(seatedAt);
+    if (!isNaN(date.getTime())) {
+      safeSeatedAt = date;
+    }
+  }
+
   const data: any = {
-    number: String(number),
-    capacity: parseInt(capacity) || 0,
-    status: String(status),
+    number: String(number || 'TBD'),
+    capacity: parseInt(capacity) || 2,
+    status: String(status || 'available'),
     x: Math.round(parseFloat(x)) || 0,
     y: Math.round(parseFloat(y)) || 0,
-    shape: String(shape),
+    shape: String(shape || 'square'),
     rotation: parseInt(rotation) || 0,
     isCombined: Boolean(isCombined),
     assignedServerId: assignedServerId || null,
     currentResId: currentResId || null,
-    mergedTableIds: mergedTableIds ? JSON.stringify(mergedTableIds) : null,
-    seatedAt: seatedAt ? new Date(seatedAt) : null,
+    mergedTableIds: Array.isArray(mergedTableIds) ? JSON.stringify(mergedTableIds) : null,
+    seatedAt: safeSeatedAt,
   };
 
-  // Only include branchId for creations
   return { id, data, branchId };
 }
 
@@ -70,12 +78,12 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     
-    // Handle Bulk Operations (e.g. Merge/Split)
+    // Handle Bulk Operations
     if (Array.isArray(body)) {
       const result = await prisma.$transaction(async (tx) => {
         return await Promise.all(body.map(async (item: any) => {
           const { id, data, branchId } = sanitizeTableData(item);
-          const isExisting = id && id.length > 10; // Simple CUID check
+          const isExisting = id && id.length > 10;
 
           if (isExisting) {
             return tx.table.update({
@@ -110,12 +118,7 @@ export async function POST(request: Request) {
     }
 
   } catch (error: any) {
-    console.error("CRITICAL API ERROR:", {
-      message: error.message,
-      code: error.code,
-      meta: error.meta,
-    });
-    
+    console.error("CRITICAL API ERROR:", error);
     return NextResponse.json({ 
       error: "Database operation failed", 
       details: error.message,

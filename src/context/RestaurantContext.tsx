@@ -67,11 +67,11 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(table)
       });
+      const data = await res.json();
       if (!res.ok) {
-        const errData = await res.json();
-        console.error("SYNC ERROR:", errData);
+        console.error("SYNC ERROR:", data);
       }
-      return await res.json();
+      return data;
     } catch (err) {
       console.error("NETWORK ERROR DURING SYNC:", err);
     }
@@ -143,11 +143,11 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
 
     const res = await fetch('/api/tables', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify([combinedTable])
     });
     
     if (res.ok) {
-        // Refresh all tables from DB
         const refreshRes = await fetch(`/api/tables?branchId=${currentBranch.id}`);
         const data = await refreshRes.json();
         setTables(data);
@@ -167,12 +167,11 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(tableData)
     });
+    const data = await res.json();
     if (res.ok) {
-        const newTable = await res.json();
-        setTables(prev => [...prev, newTable]);
+        setTables(prev => [...prev, data]);
     } else {
-        const errData = await res.json();
-        console.error("ADD TABLE ERROR:", errData);
+        console.error("ADD TABLE ERROR:", data);
     }
   };
 
