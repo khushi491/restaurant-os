@@ -10,7 +10,6 @@ import {
   WaitlistEntry,
 } from "../types";
 
-// Keep static users/branches for now as they are higher-level settings
 const mockBranches: Branch[] = [
   { id: "b1", name: "Downtown Prime", address: "123 Main St", cancellationFeeFixed: 50, cancellationFeePercent: null },
   { id: "b2", name: "Uptown Grill", address: "456 High St", cancellationFeeFixed: null, cancellationFeePercent: 10 },
@@ -60,7 +59,24 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
 
-  // Fetch tables from DB on branch change
+  // Helper to sync to API and log errors clearly
+  const syncTable = async (table: any) => {
+    try {
+      const res = await fetch('/api/tables', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(table)
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        console.error("SYNC ERROR:", errData);
+      }
+      return await res.json();
+    } catch (err) {
+      console.error("NETWORK ERROR DURING SYNC:", err);
+    }
+  };
+
   useEffect(() => {
     async function loadData() {
       setLoading(true);
@@ -87,34 +103,22 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
     };
 
     setTables(prev => prev.map(t => t.id === tableId ? { ...t, ...updates } : t));
-    await fetch('/api/tables', {
-      method: 'POST',
-      body: JSON.stringify({ id: tableId, ...updates })
-    });
+    await syncTable({ id: tableId, ...updates });
   };
 
   const updateTablePosition = async (tableId: string, x: number, y: number) => {
     setTables(prev => prev.map(t => t.id === tableId ? { ...t, x, y } : t));
-    await fetch('/api/tables', {
-      method: 'POST',
-      body: JSON.stringify({ id: tableId, x, y })
-    });
+    await syncTable({ id: tableId, x, y });
   };
 
   const updateTableRotation = async (tableId: string, rotation: number) => {
     setTables(prev => prev.map(t => t.id === tableId ? { ...t, rotation } : t));
-    await fetch('/api/tables', {
-      method: 'POST',
-      body: JSON.stringify({ id: tableId, rotation })
-    });
+    await syncTable({ id: tableId, rotation });
   };
 
   const updateTable = async (tableId: string, updates: Partial<Table>) => {
     setTables(prev => prev.map(t => t.id === tableId ? { ...t, ...updates } : t));
-    await fetch('/api/tables', {
-      method: 'POST',
-      body: JSON.stringify({ id: tableId, ...updates })
-    });
+    await syncTable({ id: tableId, ...updates });
   };
 
   const mergeTables = async (tableIds: string[]) => {
@@ -137,27 +141,21 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
       mergedTableIds: tableIds
     };
 
-    // Use transaction to delete parts and add combined
     const res = await fetch('/api/tables', {
       method: 'POST',
-      body: JSON.stringify([combinedTable]) // Need to update route logic for deletes or just mark status
+      body: JSON.stringify([combinedTable])
     });
-    const result = await res.json();
     
-    // For prototype simplicity, refresh all tables from DB
-    const refreshRes = await fetch(`/api/tables?branchId=${currentBranch.id}`);
-    const data = await refreshRes.json();
-    setTables(data);
+    if (res.ok) {
+        // Refresh all tables from DB
+        const refreshRes = await fetch(`/api/tables?branchId=${currentBranch.id}`);
+        const data = await refreshRes.json();
+        setTables(data);
+    }
   };
 
   const splitTable = async (tableId: string) => {
-    const combinedTable = tables.find(t => t.id === tableId);
-    if (!combinedTable || !combinedTable.mergedTableIds) return;
-
-    // For simplicity: delete combined and recreate parts or just reload
     await fetch(`/api/tables?id=${tableId}`, { method: 'DELETE' });
-    
-    // In a real app, restore originals. Here we just re-seed if empty or reload
     const refreshRes = await fetch(`/api/tables?branchId=${currentBranch.id}`);
     const data = await refreshRes.json();
     setTables(data);
@@ -166,10 +164,16 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
   const addTable = async (tableData: Omit<Table, "id">) => {
     const res = await fetch('/api/tables', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(tableData)
     });
-    const newTable = await res.json();
-    setTables(prev => [...prev, newTable]);
+    if (res.ok) {
+        const newTable = await res.json();
+        setTables(prev => [...prev, newTable]);
+    } else {
+        const errData = await res.json();
+        console.error("ADD TABLE ERROR:", errData);
+    }
   };
 
   const deleteTable = async (tableId: string) => {
@@ -179,14 +183,10 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
 
   const assignServer = async (tableId: string, serverId: string) => {
     setTables(prev => prev.map(t => t.id === tableId ? { ...t, assignedServerId: serverId } : t));
-    await fetch('/api/tables', {
-      method: 'POST',
-      body: JSON.stringify({ id: tableId, assignedServerId: serverId })
-    });
+    await syncTable({ id: tableId, assignedServerId: serverId });
   };
 
   const addReservation = (resData: Omit<Reservation, "id" | "createdAt" | "status">) => {
-    // Keep mock for now
     const newRes: Reservation = {
       ...resData,
       id: `r${Date.now()}`,
